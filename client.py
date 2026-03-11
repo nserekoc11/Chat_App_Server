@@ -1,54 +1,63 @@
-import socket 
+import socket
 import threading
-from server import start_server
 
 
-#client settings
-HOST = '127.0.0.1'
+HOST = "127.0.0.1"
 PORT = 5555
 
 
-
-#reciever messages from server
-def reciever_messages(client):
+def receiver_messages(client: socket.socket) -> None:
     while True:
         try:
-            message= client.recv(1024).decode()
-            print(message)
-        except:
-            print ("Disconected from server")
-            client.close()
-            break
+            data = client.recv(1024)
+            if not data:
+                print("Disconnected from server")
+                return
+            print(data.decode("utf-8", errors="replace"))
+        except OSError:
+            print("Disconnected from server")
+            return
 
 
+def start_client() -> int:
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        client.connect((HOST, PORT))
+    except OSError as e:
+        print(f"Failed to connect to {HOST}:{PORT}: {e}")
+        return 1
 
-#send messages to server
-def send_message(client):
-    while True:
-        message = input()
-        client.send(message.encode())
-        if message == f"exit({PORT})":
-            client.close()
-            break
-
-#main client function 
-def start_client(start_server):
-    client= socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client, address = start_server.accept()
-    print(f"ID {address[0]}:{address[1]}")
     print(f"Connected to server {HOST}:{PORT}")
-    
+    print("Type messages and press Enter. Use /quit to exit.")
 
-    #start threads
-    recieve_thread = threading.Thread(target=reciever_messages, args=(client,))
-    recieve_thread.start()
+    recv_thread = threading.Thread(target=receiver_messages, args=(client,), daemon=True)
+    recv_thread.start()
 
-    send_thread = threading.Thread(target=send_message, args=(client,))
-    send_thread.start()
-    
-    #show recently joined user
+    try:
+        while True:
+            try:
+                message = input()
+            except EOFError:
+                break
 
+            if message.strip().lower() in {"/quit", "/exit", "quit", "exit"}:
+                break
+
+            try:
+                client.sendall(message.encode("utf-8"))
+            except OSError:
+                print("Disconnected from server")
+                break
+    except KeyboardInterrupt:
+        pass
+    finally:
+        try:
+            client.close()
+        except OSError:
+            pass
+
+    return 0
 
 
 if __name__ == "__main__":
-    start_client(start_server)
+    raise SystemExit(start_client())
